@@ -187,7 +187,8 @@ class WhooshSearchBackend(BaseSearchBackend):
                 if not self.silently_fail:
                     raise
 
-                self.log.error("Failed to add documents to Whoosh: %s", e)
+                self.log.error("Failed to add documents to Whoosh: %s (%s)" %
+                (e, doc))
 
         if len(iterable) > 0:
             # For now, commit no matter what, as we run into locking issues otherwise.
