@@ -196,8 +196,11 @@ class WhooshSearchBackend(BaseSearchBackend):
 
             # If spelling support is desired, add to the dictionary.
             if self.include_spelling is True:
-                sp = SpellChecker(self.storage)
-                sp.add_field(self.index, self.content_field_name)
+                self.update_spelling()
+    
+    def update_spelling(self):
+        sp = SpellChecker(self.storage)
+        sp.add_field(self.index, self.content_field_name)
 
     def remove(self, obj_or_string, commit=True):
         if not self.setup_complete:
