@@ -123,6 +123,28 @@ class WhooshSearchBackend(BaseSearchBackend):
 
         self.setup_complete = True
 
+    def schema_field_for_haystack_field(self, field_name, field_class):
+        if field_class.is_multivalued:
+            if field_class.indexed is False:
+                return IDLIST(stored=True, field_boost=field_class.boost)
+            else:
+                return KEYWORD(stored=True, commas=True, scorable=True, field_boost=field_class.boost)
+        elif field_class.field_type in ['date', 'datetime']:
+            return DATETIME(stored=field_class.stored)
+        elif field_class.field_type == 'integer':
+            return NUMERIC(stored=field_class.stored, type=int, field_boost=field_class.boost)
+        elif field_class.field_type == 'float':
+            return NUMERIC(stored=field_class.stored, type=float, field_boost=field_class.boost)
+        elif field_class.field_type == 'boolean':
+            # Field boost isn't supported on BOOLEAN as of 1.8.2.
+            return BOOLEAN(stored=field_class.stored)
+        elif field_class.field_type == 'ngram':
+            return NGRAM(minsize=3, maxsize=15, stored=field_class.stored, field_boost=field_class.boost)
+        elif field_class.field_type == 'edge_ngram':
+            return NGRAMWORDS(minsize=2, maxsize=15, at='start', stored=field_class.stored, field_boost=field_class.boost)
+        else:
+            return TEXT(stored=True, analyzer=StemmingAnalyzer(), field_boost=field_class.boost)
+
     def build_schema(self, fields):
         schema_fields = {
             ID: WHOOSH_ID(stored=True, unique=True),
@@ -135,26 +157,8 @@ class WhooshSearchBackend(BaseSearchBackend):
         content_field_name = ''
 
         for field_name, field_class in fields.items():
-            if field_class.is_multivalued:
-                if field_class.indexed is False:
-                    schema_fields[field_class.index_fieldname] = IDLIST(stored=True, field_boost=field_class.boost)
-                else:
-                    schema_fields[field_class.index_fieldname] = KEYWORD(stored=True, commas=True, scorable=True, field_boost=field_class.boost)
-            elif field_class.field_type in ['date', 'datetime']:
-                schema_fields[field_class.index_fieldname] = DATETIME(stored=field_class.stored)
-            elif field_class.field_type == 'integer':
-                schema_fields[field_class.index_fieldname] = NUMERIC(stored=field_class.stored, type=int, field_boost=field_class.boost)
-            elif field_class.field_type == 'float':
-                schema_fields[field_class.index_fieldname] = NUMERIC(stored=field_class.stored, type=float, field_boost=field_class.boost)
-            elif field_class.field_type == 'boolean':
-                # Field boost isn't supported on BOOLEAN as of 1.8.2.
-                schema_fields[field_class.index_fieldname] = BOOLEAN(stored=field_class.stored)
-            elif field_class.field_type == 'ngram':
-                schema_fields[field_class.index_fieldname] = NGRAM(minsize=3, maxsize=15, stored=field_class.stored, field_boost=field_class.boost)
-            elif field_class.field_type == 'edge_ngram':
-                schema_fields[field_class.index_fieldname] = NGRAMWORDS(minsize=2, maxsize=15, at='start', stored=field_class.stored, field_boost=field_class.boost)
-            else:
-                schema_fields[field_class.index_fieldname] = TEXT(stored=True, analyzer=StemmingAnalyzer(), field_boost=field_class.boost)
+            schema_fields[field_class.index_fieldname] = \
+                self.schema_field_for_haystack_field(field_name, field_class)
 
             if field_class.document is True:
                 content_field_name = field_class.index_fieldname
@@ -182,6 +186,7 @@ class WhooshSearchBackend(BaseSearchBackend):
                 doc[key] = self._from_python(doc[key])
 
             try:
+                # import pdb; pdb.set_trace()
                 writer.update_document(**doc)
             except Exception, e:
                 if not self.silently_fail:
@@ -199,7 +204,7 @@ class WhooshSearchBackend(BaseSearchBackend):
                 self.update_spelling()
     
     def update_spelling(self):
-        sp = SpellChecker(self.storage)
+        sp = self.get_spell_checker()
         sp.add_field(self.index, self.content_field_name)
 
     def remove(self, obj_or_string, commit=True):
@@ -623,10 +628,13 @@ class WhooshSearchBackend(BaseSearchBackend):
             'facets': facets,
             'spelling_suggestion': spelling_suggestion,
         }
+        
+    def get_spell_checker(self):
+        return SpellChecker(self.storage)
 
     def create_spelling_suggestion(self, query_string):
         spelling_suggestion = None
-        sp = SpellChecker(self.storage)
+        sp = self.get_spell_checker()
         cleaned_query = force_unicode(query_string)
 
         if not query_string:
