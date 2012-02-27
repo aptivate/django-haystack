@@ -170,12 +170,21 @@ class WhooshSearchBackend(BaseSearchBackend):
 
         return (content_field_name, Schema(**schema_fields))
 
+    def get_writer(self, index):
+        """
+        Override this to return a custom Writer that may perform additional
+        work, such as removing document words from a spelling index on
+        update_document.
+        """
+        
+        return AsyncWriter(index)
+
     def update(self, index, iterable, commit=True):
         if not self.setup_complete:
             self.setup()
 
         self.index = self.index.refresh()
-        writer = AsyncWriter(self.index)
+        writer = self.get_writer(self.index)
 
         for obj in iterable:
             doc = index.full_prepare(obj)
@@ -186,7 +195,6 @@ class WhooshSearchBackend(BaseSearchBackend):
                 doc[key] = self._from_python(doc[key])
 
             try:
-                # import pdb; pdb.set_trace()
                 writer.update_document(**doc)
             except Exception, e:
                 if not self.silently_fail:
