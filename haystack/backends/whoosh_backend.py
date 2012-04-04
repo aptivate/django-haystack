@@ -350,37 +350,23 @@ class WhooshSearchBackend(BaseSearchBackend):
         else:
             model_choices = []
 
+        if narrow_queries is None:
+            final_conditions = set()
+        else:
+            final_conditions = narrow_queries
+
         if len(model_choices) > 0:
-            if narrow_queries is None:
-                narrow_queries = set()
-
-            narrow_queries.add(' OR '.join(['%s:%s' % (DJANGO_CT, rm) for rm in model_choices]))
-
-        narrow_searcher = None
-
-        if narrow_queries is not None:
-            # Potentially expensive? I don't see another way to do it in Whoosh...
-            narrow_searcher = self.index.searcher()
-
-            for nq in narrow_queries:
-                recent_narrowed_results = narrow_searcher.search(self.parser.parse(force_unicode(nq)))
-
-                if len(recent_narrowed_results) <= 0:
-                    return {
-                        'results': [],
-                        'hits': 0,
-                    }
-
-                if narrowed_results:
-                    narrowed_results.filter(recent_narrowed_results)
-                else:
-                   narrowed_results = recent_narrowed_results
-
+            final_conditions.add(' OR '.join(['%s:%s' % (DJANGO_CT, rm) for rm in model_choices]))
+        
+        final_conditions.add(query_string)
+        final_conditions = ["(%s)" % q for q in final_conditions]
+        final_query_string = ' AND '.join(final_conditions)
+        
         self.index = self.index.refresh()
 
         if self.index.doc_count():
             searcher = self.index.searcher()
-            parsed_query = self.parser.parse(query_string)
+            parsed_query = self.parser.parse(final_query_string)
 
             # In the event of an invalid/stopworded query, recover gracefully.
             if parsed_query is None:
@@ -395,10 +381,6 @@ class WhooshSearchBackend(BaseSearchBackend):
                 end_offset = 1
 
             raw_results = searcher.search(parsed_query, limit=end_offset, sortedby=sort_by, reverse=reverse)
-
-            # Handle the case where the results have been narrowed.
-            if narrowed_results is not None:
-                raw_results.filter(narrowed_results)
 
             # Determine the page.
             page_num = 0
@@ -431,9 +413,6 @@ class WhooshSearchBackend(BaseSearchBackend):
 
             results = self._process_results(raw_page, highlight=highlight, query_string=query_string, spelling_query=spelling_query, result_class=result_class)
             searcher.close()
-
-            if hasattr(narrow_searcher, 'close'):
-                narrow_searcher.close()
 
             return results
         else:
