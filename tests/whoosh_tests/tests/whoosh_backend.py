@@ -12,7 +12,8 @@ from haystack import indexes
 from haystack.models import SearchResult
 from haystack.query import SearchQuerySet, SQ
 from haystack.utils.loading import UnifiedIndex
-from core.models import MockModel, AnotherMockModel, AFourthMockModel
+from core.models import (MockModel, AnotherMockModel, AFourthMockModel,
+    MockTag)
 from core.tests.mocks import MockSearchResult
 
 
@@ -42,8 +43,8 @@ class AllTypesWhooshMockSearchIndex(indexes.SearchIndex, indexes.Indexable):
     name = indexes.CharField(model_attr='author', indexed=False)
     pub_date = indexes.DateField(model_attr='pub_date')
     sites = indexes.MultiValueField()
-    seen_count = indexes.IntegerField(indexed=False)
-    is_active = indexes.BooleanField(default=True)
+    seen_count = indexes.IntegerField(indexed=False, default=42)
+    is_active = indexes.BooleanField(model_attr='is_active')
 
     def get_model(self):
         return MockModel
@@ -103,7 +104,7 @@ class WhooshSearchBackendTestCase(TestCase):
         super(WhooshSearchBackendTestCase, self).setUp()
 
         # Stow.
-        temp_path = os.path.join('tmp', 'test_whoosh_query')
+        temp_path = os.path.join(os.sep, 'tmp', 'test_whoosh_query')
         self.old_whoosh_path = settings.HAYSTACK_CONNECTIONS['default']['PATH']
         settings.HAYSTACK_CONNECTIONS['default']['PATH'] = temp_path
 
@@ -370,6 +371,22 @@ class WhooshSearchBackendTestCase(TestCase):
         self.assertTrue(isinstance(schema._fields['seen_count'], NUMERIC))
         self.assertTrue(isinstance(schema._fields['sites'], KEYWORD))
         self.assertTrue(isinstance(schema._fields['is_active'], BOOLEAN))
+
+    def test_saving_and_loading_boolean_columns(self):
+        ix = AllTypesWhooshMockSearchIndex()
+        ui = UnifiedIndex()
+        ui.build(indexes=[ix])
+        connections['default']._index = ui
+        
+        obj = MockModel(author="Boole", is_active=False, tag_id=1)
+        obj.save()
+        ix.update_object(obj)
+        
+        sb = ix._get_backend(None)
+        all_results = sb.search('name:Boole')['results']
+        self.assertEqual(1, len(all_results))
+        obj2 = all_results[0]
+        self.assertFalse(obj2.is_active)
 
     def test_verify_type(self):
         old_ui = connections['default'].get_unified_index()

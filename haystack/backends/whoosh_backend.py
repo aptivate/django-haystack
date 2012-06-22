@@ -577,11 +577,19 @@ class WhooshSearchBackend(BaseSearchBackend):
                         # Special-cased due to the nature of KEYWORD fields.
                         if index.fields[string_key].is_multivalued:
                             if value is None or len(value) is 0:
-                                additional_fields[string_key] = []
+                                value = []
                             else:
-                                additional_fields[string_key] = value.split(',')
+                                value = value.split(',')
                         else:
-                            additional_fields[string_key] = index.fields[string_key].convert(value)
+                            # Need to allow backend to process the value
+                            # before the field does, in order to properly
+                            # reverse bool -> str. Otherwise field.convert
+                            # sees 'false' and returns bool('false') which
+                            # is True.
+                            value = self._to_python(value)
+                            value = index.fields[string_key].convert(value)
+                        
+                        additional_fields[string_key] = value
                     else:
                         additional_fields[string_key] = self._to_python(value)
 
