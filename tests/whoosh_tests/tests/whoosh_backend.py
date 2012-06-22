@@ -373,6 +373,16 @@ class WhooshSearchBackendTestCase(TestCase):
         self.assertTrue(isinstance(schema._fields['is_active'], BOOLEAN))
 
     def test_saving_and_loading_boolean_columns(self):
+        """
+        Test and fix for
+        https://github.com/toastdriven/django-haaystack/issues/382.
+        
+        The problem is that Whoosh needs to store strings in the backend,
+        so the WhooshSearchBackend converts True and False to "true" and
+        "false", but it doesn't get called to convert them back when
+        loading results, so the BooleanField converts "false" to True.
+        """
+        
         ix = AllTypesWhooshMockSearchIndex()
         ui = UnifiedIndex()
         ui.build(indexes=[ix])
