@@ -86,12 +86,12 @@ class SearchField(object):
                     if self.has_default():
                         current_object = self._default
                         # Fall out of the loop, given any further attempts at
-                        # accesses will fail misreably.
+                        # accesses will fail miserably.
                         break
                     elif self.null:
                         current_object = None
                         # Fall out of the loop, given any further attempts at
-                        # accesses will fail misreably.
+                        # accesses will fail miserably.
                         break
                     else:
                         raise SearchFieldError("The model '%s' has an empty model_attr '%s' and doesn't allow a default or null value." % (repr(obj), attr))
