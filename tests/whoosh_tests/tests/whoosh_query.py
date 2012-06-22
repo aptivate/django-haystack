@@ -65,6 +65,13 @@ class WhooshSearchQueryTestCase(TestCase):
         self.sq.add_filter(SQ(content='hello'))
         self.sq.add_boost('world', 5)
         self.assertEqual(self.sq.build_query(), "hello world^5")
+        
+    def test_build_query_boolean(self):
+        self.sq.add_filter(SQ(charm=True))
+        self.assertEqual(self.sq.build_query(), "charm:t")
+
+        self.sq.add_filter(SQ(charm=False))
+        self.assertEqual(self.sq.build_query(), "(charm:t AND charm:f)")
 
     def test_correct_exact(self):
         self.sq.add_filter(SQ(content=Exact('hello world')))

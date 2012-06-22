@@ -649,9 +649,14 @@ class WhooshSearchBackend(BaseSearchBackend):
         spelling_suggestion = ' '.join(suggested_words)
         return spelling_suggestion
 
-    def _from_python(self, value):
+    def _from_python(self, value, for_query=False):
         """
         Converts Python values to a string for Whoosh.
+        
+        for_query is needed because Whoosh now expects bool objects for
+        BOOLEAN field values, but queries still have to be converted into
+        strings by Haystack, and Whoosh treats the string "True" as False,
+        so you can't filter(bool_column=True) as you would in QuerySet. 
 
         Code courtesy of pysolr.
         """
@@ -659,7 +664,15 @@ class WhooshSearchBackend(BaseSearchBackend):
             if not hasattr(value, 'hour'):
                 value = datetime(value.year, value.month, value.day, 0, 0, 0)
         elif isinstance(value, bool):
-            pass
+            if for_query:
+                if value is None:
+                    pass
+                elif value:
+                    value = "t"
+                else:
+                    value = "f"
+            else:
+                pass
         elif isinstance(value, (list, tuple)):
             value = u','.join([force_unicode(v) for v in value])
         elif isinstance(value, (int, long, float)):
@@ -762,7 +775,8 @@ class WhooshSearchQuery(BaseSearchQuery):
 
         if not isinstance(prepared_value, (set, list, tuple)):
             # Then convert whatever we get back to what pysolr wants if needed.
-            prepared_value = self.backend._from_python(prepared_value)
+            prepared_value = self.backend._from_python(prepared_value,
+                for_query=True)
 
         # 'content' is a special reserved word, much like 'pk' in
         # Django's ORM layer. It indicates 'no special field'.
@@ -800,7 +814,9 @@ class WhooshSearchQuery(BaseSearchQuery):
                         possible_values = [prepared_value]
 
                     for possible_value in possible_values:
-                        terms.append(filter_types[filter_type] % self.backend._from_python(possible_value))
+                        terms.append(filter_types[filter_type] % 
+                            self.backend._from_python(possible_value, 
+                                for_query=True))
 
                     if len(terms) == 1:
                         query_frag = terms[0]

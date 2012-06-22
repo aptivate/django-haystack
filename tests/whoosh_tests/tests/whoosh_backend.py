@@ -325,6 +325,10 @@ class WhooshSearchBackendTestCase(TestCase):
         self.assertEqual(self.sb._from_python(datetime(2009, 5, 9, 0, 0)), datetime(2009, 5, 9, 0, 0))
         self.assertEqual(self.sb._from_python(datetime(1899, 5, 18, 0, 0)), datetime(1899, 5, 18, 0, 0))
         self.assertEqual(self.sb._from_python(datetime(2009, 5, 18, 1, 16, 30, 250)), datetime(2009, 5, 18, 1, 16, 30, 250))
+        self.assertEqual(self.sb._from_python(True), True)
+        self.assertEqual(self.sb._from_python(False), False)
+        self.assertEqual(self.sb._from_python(True, for_query=True), "t")
+        self.assertEqual(self.sb._from_python(False, for_query=True), "f")
 
     def test__to_python(self):
         self.assertEqual(self.sb._to_python('abc'), 'abc')
