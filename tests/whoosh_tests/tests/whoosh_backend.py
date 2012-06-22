@@ -372,10 +372,69 @@ class WhooshSearchBackendTestCase(TestCase):
         self.assertTrue(isinstance(schema._fields['sites'], KEYWORD))
         self.assertTrue(isinstance(schema._fields['is_active'], BOOLEAN))
 
+    def test_whoosh_boolean_field_behaviour(self):
+        """
+        Test that Whoosh behaves the way that we expect it to. If it
+        doesn't, then test_saving_and_loading_boolean_columns will probably
+        fail too, and that might be because backwards compatibility has been
+        broken. For reference, these tests pass on Whoosh 2.3.2.
+        """
+        
+        from whoosh.fields import BOOLEAN
+        wb = BOOLEAN()
+        self.assertEqual('f', wb.index(False)[0][0])
+        self.assertEqual('t', wb.index(True)[0][0])
+        
+        # This is the problem with passing the strings "true" and "false"
+        # as we used to do: both are posted as "t" in the search index.
+        self.assertEqual('t', wb.index("true")[0][0])
+        self.assertEqual('t', wb.index("false")[0][0])
+
+        from whoosh.fields import Schema, ID
+        schema = Schema(id=ID(stored=True), weird=BOOLEAN(stored=True))
+        
+        from whoosh.index import create_in
+        path = settings.HAYSTACK_CONNECTIONS['default']['PATH'] + \
+            ".test_whoosh_boolean_field_behaviour.idx"
+        import os
+        os.mkdir(path)
+        ix = create_in(path, schema)
+        
+        try:
+            writer = ix.writer()
+            writer.add_document(id=u'1', weird=True)
+            writer.add_document(id=u'2', weird=False)
+            writer.commit()
+            
+            from whoosh.qparser import QueryParser
+            parser = QueryParser("weird", ix.schema)
+            with ix.searcher() as searcher:
+                for search_for in ("yes", "true", "1", "t"):
+                    query = parser.parse("weird:%s" % search_for)
+                    results = searcher.search(query)
+                    expected = {'id': '1', 'weird': True}
+                    self.assertDictContainsSubset(expected, results[0],
+                        "unexpected result searching for '%s'" % search_for)
+
+                for search_for in ("no", "false", "0", "f"):
+                    query = parser.parse("weird:%s" % search_for)
+                    results = searcher.search(query)
+                    expected = {'id': '2', 'weird': False}
+                    self.assertDictContainsSubset(expected, results[0],
+                        "unexpected result searching for '%s'" % search_for)
+        finally:
+            from shutil import rmtree
+            rmtree(path)
+        
     def test_saving_and_loading_boolean_columns(self):
         """
         Test and fix for
-        https://github.com/toastdriven/django-haaystack/issues/382.
+        https://github.com/toastdriven/django-haystack/issues/382.
+        
+        Whoosh seems to have changed its interpretation of true and false.
+        whoosh.fields.BOOLEAN seems to require something truthy or falsey
+        as a value, and it should probably be a string for consistency with
+        
         
         The problem is that Whoosh needs to store strings in the backend,
         so the WhooshSearchBackend converts True and False to "true" and
@@ -383,20 +442,66 @@ class WhooshSearchBackendTestCase(TestCase):
         loading results, so the BooleanField converts "false" to True.
         """
         
+        from haystack.fields import BooleanField
+        b = BooleanField(model_attr='is_active')
+        falsey = MockModel(is_active=False)
+        truthy = MockModel(is_active=True)
+        self.assertEqual(False, b.prepare(falsey))
+        self.assertEqual(True,  b.prepare(truthy))
+        self.assertEqual(False, b.convert(b.prepare(falsey)))
+        self.assertEqual(True,  b.convert(b.prepare(truthy)))
+
+        from whoosh.fields import BOOLEAN
+        wb = BOOLEAN()
+        self.assertEqual('f', wb.index(b.prepare(falsey))[0][0])
+        self.assertEqual('t', wb.index(b.prepare(truthy))[0][0])
+        
         ix = AllTypesWhooshMockSearchIndex()
         ui = UnifiedIndex()
         ui.build(indexes=[ix])
         connections['default']._index = ui
         
-        obj = MockModel(author="Boole", is_active=False, tag_id=1)
-        obj.save()
-        ix.update_object(obj)
+        obj1 = MockModel(author="Boole", is_active=False, tag_id=1)
+        obj1.save()
+        obj2 = MockModel(author="Escher", is_active=True, tag_id=2)
+        obj2.save()
+
+        import pdb; pdb.set_trace()
+        ix.update_object(obj1)
+        ix.update_object(obj2)
         
         sb = ix._get_backend(None)
-        all_results = sb.search('name:Boole')['results']
-        self.assertEqual(1, len(all_results))
-        obj2 = all_results[0]
-        self.assertFalse(obj2.is_active)
+        results = sb.search('name:Boole')['results']
+        self.assertEqual(1, len(results), results)
+        self.assertFalse(results[0].is_active)
+        
+        with sb.index.searcher() as searcher:
+            results = list(searcher.documents())
+            self.assertEqual(2, len(results), results)
+
+            # not sure what order these are supposed to be returned in:
+            self.assertEqual(True, results[0]['is_active'])
+            self.assertEqual(False, results[1]['is_active'])
+            
+            results = list(searcher.documents(is_active=False))
+            self.assertEqual(1, len(results), results)
+
+        with sb.index.reader() as reader:
+            postings = reader.postings("is_active", "t").all_ids()
+            self.assertSequenceEqual([0], list(postings))
+
+            postings = reader.postings("is_active", "f").all_ids()
+            self.assertSequenceEqual([1], list(postings))
+        
+        for search_for in ("yes", "true", "1", "t"):
+            results = sb.search("is_active:%s" % search_for)['results']
+            self.assertEqual(1, len(results), results)
+            self.assertEqual(obj2, results[0].object)
+    
+        for search_for in ("no", "false", "0", "f"):
+            results = sb.search("is_active:%s" % search_for)['results']
+            self.assertEqual(1, len(results), results)
+            self.assertEqual(obj1, results[0].object)
 
     def test_verify_type(self):
         old_ui = connections['default'].get_unified_index()

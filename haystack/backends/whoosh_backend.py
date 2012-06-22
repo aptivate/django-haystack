@@ -581,12 +581,6 @@ class WhooshSearchBackend(BaseSearchBackend):
                             else:
                                 value = value.split(',')
                         else:
-                            # Need to allow backend to process the value
-                            # before the field does, in order to properly
-                            # reverse bool -> str. Otherwise field.convert
-                            # sees 'false' and returns bool('false') which
-                            # is True.
-                            value = self._to_python(value)
                             value = index.fields[string_key].convert(value)
                         
                         additional_fields[string_key] = value
@@ -665,10 +659,7 @@ class WhooshSearchBackend(BaseSearchBackend):
             if not hasattr(value, 'hour'):
                 value = datetime(value.year, value.month, value.day, 0, 0, 0)
         elif isinstance(value, bool):
-            if value:
-                value = 'true'
-            else:
-                value = 'false'
+            pass
         elif isinstance(value, (list, tuple)):
             value = u','.join([force_unicode(v) for v in value])
         elif isinstance(value, (int, long, float)):

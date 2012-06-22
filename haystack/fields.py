@@ -276,9 +276,6 @@ class BooleanField(SearchField):
 
         super(BooleanField, self).__init__(**kwargs)
 
-    def prepare(self, obj):
-        return self.convert(super(BooleanField, self).prepare(obj))
-
     def convert(self, value):
         if value is None:
             return None
