@@ -11,5 +11,6 @@ HAYSTACK_CONNECTIONS = {
         'PATH': os.path.join('tmp', 'test_whoosh_query'),
         'INCLUDE_SPELLING': True,
         # 'STORAGE': 'ram',
+        'SILENTLY_FAIL': False,
     },
 }
