@@ -551,6 +551,32 @@ class WhooshSearchBackendTestCase(TestCase):
         page_0 = self.sb.search(u'*', start_offset=0, end_offset=0)
         self.assertEqual(len(page_0['results']), 1)
 
+    def test_search_slice_against_deleted_objects(self):
+        """
+        Test that deleted items don't result in None in the result list.
+        """
+        
+        self.sb.update(self.wmmi, self.sample_objs)
+        
+        daniels = MockModel.objects.filter(author="daniel1")
+
+        results = SearchQuerySet().filter(name="daniel1").load_all()[0:200]
+        self.assertItemsEqual([d.pk for d in daniels],
+            [int(res.pk) for res in results])
+
+        # now delete one of them, so the res.pk points to a nonexistent
+        # model object
+        daniels[0].delete()
+        daniels = daniels[1:]
+
+        results = SearchQuerySet().filter(name="daniel1").load_all()[0:200]
+        self.assertIsNotNone(results[-1], "This test fails because when " +
+            "performing a slice, it failed to replace some of the None " +
+            "fillers in the result cache, because post_process_results() " +
+            "returned fewer than the expected number of results")
+        self.assertItemsEqual([d.pk for d in daniels],
+            [int(res.pk) for res in results])
+
     def test_scoring(self):
         self.sb.update(self.wmmi, self.sample_objs)
 

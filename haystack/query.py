@@ -178,8 +178,10 @@ class SearchQuerySet(object):
 
         to_cache = self.post_process_results(results)
 
-        # Assign by slice.
-        self._result_cache[start:start + len(to_cache)] = to_cache
+        # Assign by slice. May replace more than len(to_cache) items, if
+        # post_process_results discarded some because they point to model
+        # objects that don't exist any more.
+        self._result_cache[start:start + len(results)] = to_cache
         return True
 
     def post_process_results(self, results):
