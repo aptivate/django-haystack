@@ -411,7 +411,7 @@ class WhooshSearchBackend(BaseSearchBackend):
 
         if self.index.doc_count():
             searcher = self.index.searcher()
-            parsed_query = self.parser.parse(final_query_string)
+            parsed_query = self.parser.parse(query_string)
 
             # In the event of an invalid/stopworded query, recover gracefully.
             if parsed_query is None:
@@ -676,7 +676,7 @@ class WhooshSearchBackend(BaseSearchBackend):
         spelling_suggestion = None
         reader = self.index.reader()
         corrector = reader.corrector(self.content_field_name)
-        cleaned_query = force_unicode(query_string)
+        cleaned_query = force_text(query_string)
 
         if not query_string:
             return spelling_suggestion
