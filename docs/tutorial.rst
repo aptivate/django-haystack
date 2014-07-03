@@ -13,22 +13,28 @@ improve the site better.
 To this end, Haystack tries to make integrating custom search as easy as
 possible while being flexible/powerful enough to handle more advanced use cases.
 
-Haystack is a reusable app (that is, it relies only on it's own code and focuses
+Haystack is a reusable app (that is, it relies only on its own code and focuses
 on providing just search) that plays nicely with both apps you control as well as
 third-party apps (such as ``django.contrib.*``) without having to modify the
 sources.
 
 Haystack also does pluggable backends (much like Django's database
 layer), so virtually all of the code you write ought to be portable between
-which ever search engine you choose.
+whichever search engine you choose.
 
 .. note::
 
     If you hit a stumbling block, there is both a `mailing list`_ and
     `#haystack on irc.freenode.net`_ to get help.
 
+.. note::
+
+   You can participate in and/or track the development of Haystack by
+   subscribing to the `development mailing list`_.
+
 .. _mailing list: http://groups.google.com/group/django-haystack
 .. _#haystack on irc.freenode.net: irc://irc.freenode.net/haystack
+.. _development mailing list: http://groups.google.com/group/django-haystack-dev
 
 This tutorial assumes that you have a basic familiarity with the various major
 parts of Django (models/forms/views/settings/URLconfs) and tailored to the
@@ -55,6 +61,16 @@ Finally, before starting with Haystack, you will want to choose a search
 backend to get started. There is a quick-start guide to
 :doc:`installing_search_engines`, though you may want to defer to each engine's
 official instructions.
+
+
+Installation
+=============
+
+Use your favorite Python package manager to install the app from PyPI, e.g.
+
+Example::
+
+    pip install django-haystack
 
 
 Configuration
@@ -156,7 +172,7 @@ Example::
     import os
     HAYSTACK_CONNECTIONS = {
         'default': {
-            'ENGINE': 'haystack.backends.xapian_backend.XapianEngine',
+            'ENGINE': 'xapian_backend.XapianEngine',
             'PATH': os.path.join(os.path.dirname(__file__), 'xapian_index'),
         },
     }
@@ -221,7 +237,7 @@ Haystack to automatically pick it up. The ``NoteIndex`` should look like::
         def get_model(self):
             return Note
 
-        def index_queryset(self):
+        def index_queryset(self, using=None):
             """Used when the entire index for model is updated."""
             return self.get_model().objects.filter(pub_date__lte=datetime.datetime.now())
 
@@ -240,8 +256,8 @@ which field is the primary field for searching within.
     it won't matter. It's simply a convention to call it ``text``.
 
 Additionally, we're providing ``use_template=True`` on the ``text`` field. This
-allows us to use a data template (rather than error prone concatenation) to
-build the document the search engine will use in searching. You’ll need to
+allows us to use a data template (rather than error-prone concatenation) to
+build the document the search engine will index. You’ll need to
 create a new template inside your template directory called
 ``search/indexes/myapp/note_text.txt`` and place the following inside::
 
@@ -360,7 +376,7 @@ models were processed and placed in the index.
     things to update).
 
     Alternatively, if you have low traffic and/or your search engine can handle
-    it, the ``RealTimeSearchIndex`` automatically handles updates/deletes
+    it, the ``RealtimeSignalProcessor`` automatically handles updates/deletes
     for you.
 
 
